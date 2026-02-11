@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import ProxyTester from "./ProxyTester";
 
 const INTERVAL = 2000;
+
+type Tab = "stream" | "proxy";
 
 interface IpData {
   ip: string;
@@ -36,6 +39,7 @@ function countryFlag(code: string): string {
 }
 
 export default function IpStreamMonitor() {
+  const [activeTab, setActiveTab] = useState<Tab>("stream");
   const [currentData, setCurrentData] = useState<IpData | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [running, setRunning] = useState(true);
@@ -50,7 +54,6 @@ export default function IpStreamMonitor() {
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const runningRef = useRef(true);
 
-  // Keep runningRef in sync
   useEffect(() => {
     runningRef.current = running;
   }, [running]);
@@ -122,7 +125,6 @@ export default function IpStreamMonitor() {
 
       setHistory((prev) => [entry, ...prev]);
 
-      // Remove highlight after animation
       setTimeout(() => {
         setHistory((prev) =>
           prev.map((e) => (e.id === entry.id ? { ...e, isNew: false } : e))
@@ -185,6 +187,20 @@ export default function IpStreamMonitor() {
     setCurrentData(null);
   }, []);
 
+  // Handle tab switching — pause stream when on proxy tab
+  const switchTab = useCallback(
+    (tab: Tab) => {
+      setActiveTab(tab);
+      if (tab === "proxy" && runningRef.current) {
+        stopStream();
+      }
+      if (tab === "stream" && !runningRef.current) {
+        startStream();
+      }
+    },
+    [startStream, stopStream]
+  );
+
   // Start on mount
   useEffect(() => {
     startStream();
@@ -216,118 +232,139 @@ export default function IpStreamMonitor() {
             <h1>IP STREAM</h1>
           </div>
           <div className="subtitle">
-            Real-time IP / ASN / geolocation tracker
+            Real-time IP / ASN / geolocation tracker + proxy tester
           </div>
         </header>
 
-        {/* Current IP Card */}
-        <div className="current-card">
-          <div className="current-label">&#9658; Current Connection</div>
-          <div className="current-ip">{currentData?.ip ?? "—"}</div>
-          <div className="current-details">
-            <div className="detail-item">
-              <span className="detail-label">ASN / ISP</span>
-              <span className="detail-value">
-                {currentData?.asn ?? "—"}
-              </span>
-            </div>
-            <div className="detail-item">
-              <span className="detail-label">Location</span>
-              <span className="detail-value">
-                {currentData ? `${flag} ${location}` : "—"}
-              </span>
-            </div>
-            <div className="detail-item">
-              <span className="detail-label">Coordinates</span>
-              <span className="detail-value">
-                {currentData
-                  ? `${currentData.lat}, ${currentData.lon}`
-                  : "—"}
-              </span>
-            </div>
-            <div className="detail-item">
-              <span className="detail-label">Timezone</span>
-              <span className="detail-value">
-                {currentData?.timezone ?? "—"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="stats-row">
-          <div className="stat-box">
-            <div className="stat-number">{totalChecks}</div>
-            <div className="stat-label">Total Checks</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-number">{uniqueIps}</div>
-            <div className="stat-label">Unique IPs</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-number">{ipChanges}</div>
-            <div className="stat-label">IP Changes</div>
-          </div>
-        </div>
-
-        {/* Progress */}
-        <div className="status-text">
-          <div className={`status-dot${!running ? " paused" : ""}`} />
-          <span>{statusText}</span>
-        </div>
-        <div className="loading-bar">
-          <div
-            className="loading-bar-inner"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        {/* Controls */}
-        <div className="controls">
+        {/* Tabs */}
+        <div className="tabs">
           <button
-            className={running ? "active" : ""}
-            onClick={toggleStream}
+            className={`tab${activeTab === "stream" ? " active" : ""}`}
+            onClick={() => switchTab("stream")}
           >
-            {running ? "⏸ Pause" : "▶ Resume"}
+            ▸ IP Stream
           </button>
-          <button onClick={fetchNow}>↻ Fetch Now</button>
-          <div className="spacer" />
-          <button className="danger" onClick={clearHistory}>
-            ✕ Clear
+          <button
+            className={`tab${activeTab === "proxy" ? " active" : ""}`}
+            onClick={() => switchTab("proxy")}
+          >
+            ▸ Proxy Tester
           </button>
         </div>
 
-        {/* History */}
-        <div className="history-section">
-          <div className="history-header">
-            <span>#</span>
-            <span>IP Address</span>
-            <span>ASN / ISP</span>
-            <span>Location</span>
-            <span>Time</span>
-          </div>
-          <div className="history-list">
-            {history.length === 0 ? (
-              <div className="empty-state">Waiting for first check...</div>
-            ) : (
-              history.map((entry, i) => (
-                <div
-                  key={entry.id}
-                  className={`history-row${entry.isNew ? " new-entry" : ""}`}
-                >
-                  <span className="row-index">{history.length - i}</span>
-                  <span
-                    className={`row-ip${entry.changed ? " ip-changed" : ""}`}
-                  >
-                    {entry.ip}
+        {/* IP Stream Tab */}
+        <div style={{ display: activeTab === "stream" ? "block" : "none" }}>
+            <div className="current-card">
+              <div className="current-label">&#9658; Current Connection</div>
+              <div className="current-ip">{currentData?.ip ?? "—"}</div>
+              <div className="current-details">
+                <div className="detail-item">
+                  <span className="detail-label">ASN / ISP</span>
+                  <span className="detail-value">
+                    {currentData?.asn ?? "—"}
                   </span>
-                  <span className="row-asn">{entry.asn}</span>
-                  <span className="row-location">{entry.location}</span>
-                  <span className="row-time">{entry.time}</span>
                 </div>
-              ))
-            )}
-          </div>
+                <div className="detail-item">
+                  <span className="detail-label">Location</span>
+                  <span className="detail-value">
+                    {currentData ? `${flag} ${location}` : "—"}
+                  </span>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">Coordinates</span>
+                  <span className="detail-value">
+                    {currentData
+                      ? `${currentData.lat}, ${currentData.lon}`
+                      : "—"}
+                  </span>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">Timezone</span>
+                  <span className="detail-value">
+                    {currentData?.timezone ?? "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="stats-row">
+              <div className="stat-box">
+                <div className="stat-number">{totalChecks}</div>
+                <div className="stat-label">Total Checks</div>
+              </div>
+              <div className="stat-box">
+                <div className="stat-number">{uniqueIps}</div>
+                <div className="stat-label">Unique IPs</div>
+              </div>
+              <div className="stat-box">
+                <div className="stat-number">{ipChanges}</div>
+                <div className="stat-label">IP Changes</div>
+              </div>
+            </div>
+
+            <div className="status-text">
+              <div className={`status-dot${!running ? " paused" : ""}`} />
+              <span>{statusText}</span>
+            </div>
+            <div className="loading-bar">
+              <div
+                className="loading-bar-inner"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            <div className="controls">
+              <button
+                className={running ? "active" : ""}
+                onClick={toggleStream}
+              >
+                {running ? "⏸ Pause" : "▶ Resume"}
+              </button>
+              <button onClick={fetchNow}>↻ Fetch Now</button>
+              <div className="spacer" />
+              <button className="danger" onClick={clearHistory}>
+                ✕ Clear
+              </button>
+            </div>
+
+            <div className="history-section">
+              <div className="history-header">
+                <span>#</span>
+                <span>IP Address</span>
+                <span>ASN / ISP</span>
+                <span>Location</span>
+                <span>Time</span>
+              </div>
+              <div className="history-list">
+                {history.length === 0 ? (
+                  <div className="empty-state">
+                    Waiting for first check...
+                  </div>
+                ) : (
+                  history.map((entry, i) => (
+                    <div
+                      key={entry.id}
+                      className={`history-row${entry.isNew ? " new-entry" : ""}`}
+                    >
+                      <span className="row-index">{history.length - i}</span>
+                      <span
+                        className={`row-ip${entry.changed ? " ip-changed" : ""}`}
+                      >
+                        {entry.ip}
+                      </span>
+                      <span className="row-asn">{entry.asn}</span>
+                      <span className="row-location">{entry.location}</span>
+                      <span className="row-time">{entry.time}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+        </div>
+
+        {/* Proxy Tester Tab */}
+        <div style={{ display: activeTab === "proxy" ? "block" : "none" }}>
+          <ProxyTester />
         </div>
       </div>
     </>

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "IP Stream Monitor",
-  description: "Real-time IP / ASN / geolocation tracker",
+  title: "IP Stream Monitor + Proxy Tester",
+  description: "Real-time IP / ASN / geolocation tracker + proxy tester",
 };
 
 export default function RootLayout({
