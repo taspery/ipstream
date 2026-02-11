@@ -2,7 +2,14 @@
 
 import { useState, useCallback } from "react";
 
-/* ── Verified working Australian cities (tested against proxy.goproxies.com) ── */
+type Provider = "goproxies" | "oxylabs";
+
+const PROVIDERS: { id: Provider; label: string; host: string; port: number }[] = [
+  { id: "goproxies", label: "GoProxies", host: "proxy.goproxies.com", port: 1080 },
+  { id: "oxylabs", label: "Oxylabs", host: "pr.oxylabs.io", port: 7777 },
+];
+
+/* ── Verified working Australian cities ── */
 const AU_REGIONS: { label: string; cities: { name: string; slug: string; note?: string }[] }[] = [
   {
     label: "NSW",
@@ -69,6 +76,7 @@ interface ProxyGeneratorProps {
 }
 
 export default function ProxyGenerator({ onGenerate }: ProxyGeneratorProps) {
+  const [provider, setProvider] = useState<Provider>("goproxies");
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -77,7 +85,10 @@ export default function ProxyGenerator({ onGenerate }: ProxyGeneratorProps) {
   const [count, setCount] = useState(10);
   const [useCity, setUseCity] = useState(true);
   const [useAsn, setUseAsn] = useState(false);
+  const [sessTime, setSessTime] = useState(10);
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
+
+  const providerInfo = PROVIDERS.find((p) => p.id === provider)!;
 
   const toggleRegion = (label: string) => {
     setExpandedRegions((prev) => {
@@ -147,19 +158,35 @@ export default function ProxyGenerator({ onGenerate }: ProxyGeneratorProps) {
     for (let i = 1; i <= count; i++) {
       for (const city of cities) {
         for (const asn of asns) {
-          const userParts = [`customer-${user}`, "country-au"];
-          if (city) userParts.push(`city-au_${city}`);
-          if (asn) userParts.push(`asn-${asn}`);
-          userParts.push(`sessionid-${i}`);
-          proxies.push(
-            `http://${userParts.join("-")}:${pass}@proxy.goproxies.com:1080`
-          );
+          if (provider === "goproxies") {
+            const userParts = [`customer-${user}`, "country-au"];
+            if (city) userParts.push(`city-au_${city}`);
+            if (asn) userParts.push(`asn-${asn}`);
+            userParts.push(`sessionid-${i}`);
+            proxies.push(
+              `http://${userParts.join("-")}:${pass}@proxy.goproxies.com:1080`
+            );
+          } else if (provider === "oxylabs") {
+            // Oxylabs: ASN and country/city can't coexist — ASN takes priority
+            const userParts = [`customer-${user}`];
+            if (asn) {
+              userParts.push(`ASN-${asn}`);
+            } else {
+              userParts.push("cc-au");
+              if (city) userParts.push(`city-${city}`);
+            }
+            const sessId = `${city || "au"}${asn || ""}${String(i).padStart(3, "0")}`;
+            userParts.push(`sessid-${sessId}`, `sesstime-${sessTime * 60}`);
+            proxies.push(
+              `http://${userParts.join("-")}:${pass}@pr.oxylabs.io:7777`
+            );
+          }
         }
       }
     }
 
     onGenerate(proxies);
-  }, [user, pass, selectedCities, selectedAsns, count, useCity, useAsn, onGenerate]);
+  }, [user, pass, selectedCities, selectedAsns, count, useCity, useAsn, provider, sessTime, onGenerate]);
 
   const cityMultiplier = useCity ? Math.max(selectedCities.size, 0) : 1;
   const asnMultiplier = useAsn && selectedAsns.size > 0 ? selectedAsns.size : 1;
@@ -168,11 +195,31 @@ export default function ProxyGenerator({ onGenerate }: ProxyGeneratorProps) {
   const allCitySlugs = AU_REGIONS.flatMap((r) => r.cities.map((c) => c.slug));
   const allSelected = allCitySlugs.length > 0 && allCitySlugs.every((s) => selectedCities.has(s));
 
+  // Oxylabs note: ASN can't combine with country/city
+  const oxyAsnWarning = provider === "oxylabs" && useAsn && useCity;
+
   return (
     <div className="gen-container">
+      {/* Provider selector */}
+      <div className="gen-section">
+        <label className="gen-label">Provider</label>
+        <div className="gen-provider-row">
+          {PROVIDERS.map((p) => (
+            <button
+              key={p.id}
+              className={`gen-provider-btn ${provider === p.id ? "active" : ""}`}
+              onClick={() => setProvider(p.id)}
+            >
+              {p.label}
+              <span className="gen-provider-host">{p.host}:{p.port}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Credentials */}
       <div className="gen-section">
-        <label className="gen-label">GoProxies Credentials</label>
+        <label className="gen-label">{providerInfo.label} Credentials</label>
         <div className="gen-creds-row">
           <div className="gen-field">
             <span className="gen-field-prefix">customer-</span>
@@ -249,6 +296,27 @@ export default function ProxyGenerator({ onGenerate }: ProxyGeneratorProps) {
         </div>
       </div>
 
+      {/* Session time (Oxylabs only) */}
+      {provider === "oxylabs" && (
+        <div className="gen-section">
+          <label className="gen-label">
+            Session Duration <span className="optional-tag">{sessTime}m</span>
+          </label>
+          <div className="gen-count-row">
+            <input
+              type="range"
+              min={1}
+              max={1440}
+              step={1}
+              value={sessTime}
+              onChange={(e) => setSessTime(Number(e.target.value))}
+              className="gen-slider"
+            />
+            <span className="gen-count-value">{sessTime}m</span>
+          </div>
+        </div>
+      )}
+
       {/* ASN targeting toggle */}
       <div className="gen-section">
         <div className="gen-toggle-row">
@@ -262,6 +330,11 @@ export default function ProxyGenerator({ onGenerate }: ProxyGeneratorProps) {
             <span className="gen-toggle-knob" />
           </button>
         </div>
+        {oxyAsnWarning && (
+          <span className="gen-warning">
+            Oxylabs: ASN and Country/City can&apos;t be combined. ASN will take priority, city targeting will be ignored.
+          </span>
+        )}
       </div>
 
       {/* ASN selector */}
