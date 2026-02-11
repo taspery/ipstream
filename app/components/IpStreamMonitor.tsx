@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ProxyTester from "./ProxyTester";
+import ProxyGenerator from "./ProxyGenerator";
 
 const INTERVAL = 2000;
 
-type Tab = "stream" | "proxy";
+type Tab = "stream" | "proxy" | "generator";
 
 interface IpData {
   ip: string;
@@ -40,6 +41,7 @@ function countryFlag(code: string): string {
 
 export default function IpStreamMonitor() {
   const [activeTab, setActiveTab] = useState<Tab>("stream");
+  const [generatedProxies, setGeneratedProxies] = useState("");
   const [currentData, setCurrentData] = useState<IpData | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [running, setRunning] = useState(true);
@@ -187,11 +189,11 @@ export default function IpStreamMonitor() {
     setCurrentData(null);
   }, []);
 
-  // Handle tab switching — pause stream when on proxy tab
+  // Handle tab switching — pause stream when on proxy/generator tab
   const switchTab = useCallback(
     (tab: Tab) => {
       setActiveTab(tab);
-      if (tab === "proxy" && runningRef.current) {
+      if ((tab === "proxy" || tab === "generator") && runningRef.current) {
         stopStream();
       }
       if (tab === "stream" && !runningRef.current) {
@@ -199,6 +201,15 @@ export default function IpStreamMonitor() {
       }
     },
     [startStream, stopStream]
+  );
+
+  // When proxies are generated, populate the tester and switch to proxy tab
+  const handleGenerate = useCallback(
+    (proxies: string[]) => {
+      setGeneratedProxies(proxies.join("\n"));
+      setActiveTab("proxy");
+    },
+    []
   );
 
   // Start on mount
@@ -249,6 +260,12 @@ export default function IpStreamMonitor() {
             onClick={() => switchTab("proxy")}
           >
             ▸ Proxy Tester
+          </button>
+          <button
+            className={`tab${activeTab === "generator" ? " active" : ""}`}
+            onClick={() => switchTab("generator")}
+          >
+            ▸ Generator
           </button>
         </div>
 
@@ -364,7 +381,12 @@ export default function IpStreamMonitor() {
 
         {/* Proxy Tester Tab */}
         <div style={{ display: activeTab === "proxy" ? "block" : "none" }}>
-          <ProxyTester />
+          <ProxyTester externalInput={generatedProxies} />
+        </div>
+
+        {/* Generator Tab */}
+        <div style={{ display: activeTab === "generator" ? "block" : "none" }}>
+          <ProxyGenerator onGenerate={handleGenerate} />
         </div>
       </div>
     </>

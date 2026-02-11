@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface ProxyResult {
   proxy: string;
@@ -185,9 +185,20 @@ function ProxyDetailModal({
   );
 }
 
-export default function ProxyTester() {
+interface ProxyTesterProps {
+  externalInput?: string;
+}
+
+export default function ProxyTester({ externalInput }: ProxyTesterProps) {
   const [proxyInput, setProxyInput] = useState("");
   const [asnInput, setAsnInput] = useState("");
+
+  // Accept externally generated proxy list
+  useEffect(() => {
+    if (externalInput) {
+      setProxyInput(externalInput);
+    }
+  }, [externalInput]);
   const [results, setResults] = useState<ProxyResult[]>([]);
   const [testing, setTesting] = useState(false);
   const [progressText, setProgressText] = useState("");
