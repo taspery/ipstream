@@ -50,6 +50,8 @@ export default function IpStreamMonitor() {
 
   const lastIpRef = useRef<string | null>(null);
   const ipChangesRef = useRef(0);
+  const lastAsnRef = useRef<string | null>(null);
+  const asnChangesRef = useRef(0);
   const uniqueSetRef = useRef(new Set<string>());
   const entryIdRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -100,6 +102,11 @@ export default function IpStreamMonitor() {
         lastIpRef.current !== null && lastIpRef.current !== data.ip;
       if (changed) ipChangesRef.current++;
       lastIpRef.current = data.ip;
+
+      const asnChanged =
+        lastAsnRef.current !== null && lastAsnRef.current !== data.asn;
+      if (asnChanged) asnChangesRef.current++;
+      lastAsnRef.current = data.asn;
       uniqueSetRef.current.add(data.ip);
 
       setCurrentData(data);
@@ -185,6 +192,8 @@ export default function IpStreamMonitor() {
     setHistory([]);
     lastIpRef.current = null;
     ipChangesRef.current = 0;
+    lastAsnRef.current = null;
+    asnChangesRef.current = 0;
     uniqueSetRef.current.clear();
     setCurrentData(null);
   }, []);
@@ -225,6 +234,7 @@ export default function IpStreamMonitor() {
   const totalChecks = history.length;
   const uniqueIps = uniqueSetRef.current.size;
   const ipChanges = ipChangesRef.current;
+  const asnChanges = asnChangesRef.current;
 
   const flag = currentData ? countryFlag(currentData.countryCode) : "";
   const location = currentData
@@ -316,6 +326,10 @@ export default function IpStreamMonitor() {
               <div className="stat-box">
                 <div className="stat-number">{ipChanges}</div>
                 <div className="stat-label">IP Changes</div>
+              </div>
+              <div className="stat-box">
+                <div className="stat-number">{asnChanges}</div>
+                <div className="stat-label">ASN Changes</div>
               </div>
             </div>
 
